@@ -389,7 +389,7 @@ def parse_args():
 
     p.add_argument("--precache", action="store_true", help="Precompute FM logits on EGMD eval set (200 segments)")
     p.add_argument("--fm_ckpt", type=str, default="", help="FM checkpoint path (required with --precache)")
-    p.add_argument("--eval_steps", type=int, default=5, help="FM sampling steps for caching")
+    p.add_argument("--eval_steps", type=int, default=3, help="FM sampling steps for caching")
     p.add_argument("--num_samples", type=int, default=200, help="Number of eval segments to cache")
     p.add_argument("--max_gpus", type=int, default=4)
     return p.parse_args()
