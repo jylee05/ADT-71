@@ -160,7 +160,8 @@ def apply_edits(
 
     # adaptive residual blend
     refined_on = base_on + gate * (edited_on - base_on)
-    refined_vel = torch.clamp(base_vel + gate.squeeze(1) * vel_residual, -1.0, 1.0)
+    # gate is (B,1,1), keep dims for safe broadcasting over (B,T,C).
+    refined_vel = torch.clamp(base_vel + gate * vel_residual, -1.0, 1.0)
 
     out = torch.stack([refined_on, refined_vel], dim=-1).reshape(b, t, d)
     return out
