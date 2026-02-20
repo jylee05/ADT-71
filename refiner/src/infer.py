@@ -39,23 +39,37 @@ def main():
     p = argparse.ArgumentParser(description="Run drum refiner from cached FM logits")
     p.add_argument("--refiner_ckpt", required=True)
     p.add_argument("--fm_logits_pt", required=True, help="tensor path of shape (T, C*2) or (1,T,C*2)")
+    p.add_argument("--spec_pt", default="", help="Optional tensor path of mel spec (T, N_MELS) or (1,T,N_MELS)")
     p.add_argument("--strength", type=float, default=1.0, help="manual override for refine strength")
     args = p.parse_args()
 
     fm_cfg = FMConfig()
-    model = DrumRefiner(RefinerConfig(drum_channels=fm_cfg.DRUM_CHANNELS))
+    model = DrumRefiner(RefinerConfig(drum_channels=fm_cfg.DRUM_CHANNELS), cond_dim=fm_cfg.N_MELS)
     ckpt = torch.load(args.refiner_ckpt, map_location="cpu")
-    model.load_state_dict(ckpt["model"])
+    model.load_state_dict(ckpt["model"], strict=True)
     model.eval()
 
     fm_logits = torch.load(args.fm_logits_pt, map_location="cpu")
     if isinstance(fm_logits, dict):
+        spec = fm_logits.get("spec", None)
         fm_logits = fm_logits["fm_logits"]
+    else:
+        spec = None
+
     if fm_logits.ndim == 2:
         fm_logits = fm_logits.unsqueeze(0)
 
+    if args.spec_pt:
+        spec = torch.load(args.spec_pt, map_location="cpu")
+
+    if spec is None:
+        spec = torch.zeros((fm_logits.size(0), fm_logits.size(1), fm_cfg.N_MELS), dtype=fm_logits.dtype)
+        print("[WARN] spec is missing. Using zeros for cond_feats.")
+    elif spec.ndim == 2:
+        spec = spec.unsqueeze(0)
+
     with torch.no_grad():
-        out = model(fm_logits, cond_feats=None)
+        out = model(fm_logits, cond_feats=spec)
         out["gate"] = torch.clamp(out["gate"] * args.strength, 0.0, 1.0)
         refined = apply_edits(fm_logits, out["edit_logits"], out["vel_residual"], out["gate"])
 
