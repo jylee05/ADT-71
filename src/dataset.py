@@ -376,12 +376,12 @@ class EGMDTrainDataset(Dataset):
 
 
 class EGMDEvalDataset(Dataset):
-    """EGMD Evaluation Dataset - uses sliding windows for 5-second segments"""
-    def __init__(self, overlap_ratio=0.5, limit=None):
+    """EGMD Evaluation Dataset - uses sliding windows for configurable segments."""
+    def __init__(self, overlap_ratio=0.5, limit=None, segment_len=None):
         self.config = Config()
         self.files = []  # Will store (file_path, segment_info) tuples
         self.overlap_ratio = overlap_ratio
-        self.segment_len = 5.0  # 5 seconds per segment (MERT window)
+        self.segment_len = float(segment_len) if segment_len is not None else 5.0
         
         # Spectrogram Transform (44.1kHz)
         self.spec_transform = torchaudio.transforms.MelSpectrogram(
