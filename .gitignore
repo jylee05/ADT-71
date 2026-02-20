@@ -1,0 +1,25 @@
+# --- 모델 및 데이터 제외 ---
+pretrained_models/
+checkpoints/
+outputs/
+eval_results/
+129_checkpoints/
+after_vel_notishit_checkpoints/
+before5_3e-4_checkpoints/
+mert_train_checkpoints/
+old_checkpoints/
+all_ten_checkpoints/
+200epoch_checkpoints/
+
+# --- 시스템 및 환경 설정 제외 ---
+__pycache__/
+*.pyc
+.DS_Store
+.venv
+venv/
+.env
+
+
+# --- IDE 설정 제외 (사용 중이라면) ---
+.vscode/
+.idea/
