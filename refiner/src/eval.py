@@ -45,6 +45,36 @@ class CachedRefinerEvalDataset(Dataset):
         }
 
 
+def _pad_and_collate_eval_batch(batch):
+    """Collate cached eval samples with variable sequence lengths.
+
+    FM eval cache may include tail segments with shorter frame lengths,
+    so default_collate (torch.stack) fails. We pad time dimension to the
+    longest sample in the batch and keep per-sample lengths for unpadding.
+    """
+
+    max_len = max(sample["fm_logits"].shape[0] for sample in batch)
+
+    def _pad_time(x: torch.Tensor, fill_value: float = 0.0) -> torch.Tensor:
+        pad_t = max_len - x.shape[0]
+        if pad_t <= 0:
+            return x
+        out = torch.full((max_len, *x.shape[1:]), fill_value=fill_value, dtype=x.dtype)
+        out[: x.shape[0]] = x
+        return out
+
+    return {
+        "fm_logits": torch.stack([_pad_time(sample["fm_logits"], fill_value=0.0) for sample in batch], dim=0),
+        "target": torch.stack([_pad_time(sample["target"], fill_value=-1.0) for sample in batch], dim=0),
+        "spec": torch.stack([_pad_time(sample["spec"], fill_value=0.0) for sample in batch], dim=0),
+        "file_id": [sample["file_id"] for sample in batch],
+        "start_time": torch.tensor([sample["start_time"] for sample in batch], dtype=torch.float32),
+        "end_time": torch.tensor([sample["end_time"] for sample in batch], dtype=torch.float32),
+        "fm_loss": torch.tensor([sample["fm_loss"] for sample in batch], dtype=torch.float32),
+        "seq_len": torch.tensor([sample["fm_logits"].shape[0] for sample in batch], dtype=torch.long),
+    }
+
+
 def _resolve_devices(max_gpus: int = 4):
     if not torch.cuda.is_available():
         return torch.device("cpu"), []
@@ -282,7 +312,7 @@ class RefinerEvaluator:
     @torch.no_grad()
     def evaluate(self, args):
         ds = CachedRefinerEvalDataset(args.cache_dir)
-        dl = DataLoader(ds, batch_size=args.batch_size, shuffle=False, num_workers=0)
+        dl = DataLoader(ds, batch_size=args.batch_size, shuffle=False, num_workers=0, collate_fn=_pad_and_collate_eval_batch)
 
         model = DrumRefiner(RefinerConfig(drum_channels=self.config.DRUM_CHANNELS), cond_dim=self.config.N_MELS)
         ckpt = torch.load(args.refiner_ckpt, map_location="cpu")
@@ -300,13 +330,14 @@ class RefinerEvaluator:
             refined = apply_edits(fm_logits, out["edit_logits"], out["vel_residual"], out["gate"])
 
             for i in range(refined.size(0)):
+                seq_len = int(batch["seq_len"][i])
                 segment_results.append(
                     {
                         "file_id": batch["file_id"][i],
                         "start_time": float(batch["start_time"][i]),
                         "end_time": float(batch["end_time"][i]),
-                        "pred_grid": refined[i].cpu().numpy(),
-                        "target_grid": target[i].cpu().numpy(),
+                        "pred_grid": refined[i, :seq_len].cpu().numpy(),
+                        "target_grid": target[i, :seq_len].cpu().numpy(),
                     }
                 )
                 all_losses.append(float(batch["fm_loss"][i]))
