@@ -131,7 +131,10 @@ def train_refiner(args):
         pin_memory=torch.cuda.is_available(),
     )
 
-    model = DrumRefiner(RefinerConfig(drum_channels=fm_cfg.DRUM_CHANNELS)).to(device)
+    model = DrumRefiner(
+        RefinerConfig(drum_channels=fm_cfg.DRUM_CHANNELS),
+        cond_dim=fm_cfg.N_MELS,
+    ).to(device)
     if len(device_ids) > 1:
         print(f"[Refiner train] Using {len(device_ids)} GPUs: {device_ids}")
         model = nn.DataParallel(model, device_ids=device_ids)
