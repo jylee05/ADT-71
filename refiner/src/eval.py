@@ -35,9 +35,9 @@ class CachedRefinerEvalDataset(Dataset):
     def __getitem__(self, idx):
         obj = torch.load(self.paths[idx], map_location="cpu")
         return {
-            "fm_logits": obj["fm_logits"],
-            "target": obj["target"],
-            "spec": obj["spec"],
+            "fm_logits": obj["fm_logits"].clone().contiguous(),
+            "target": obj["target"].clone().contiguous(),
+            "spec": obj["spec"].clone().contiguous(),
             "file_id": obj["file_id"],
             "start_time": float(obj["start_time"]),
             "end_time": float(obj["end_time"]),
@@ -282,7 +282,7 @@ class RefinerEvaluator:
     @torch.no_grad()
     def evaluate(self, args):
         ds = CachedRefinerEvalDataset(args.cache_dir)
-        dl = DataLoader(ds, batch_size=args.batch_size, shuffle=False, num_workers=2)
+        dl = DataLoader(ds, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
         model = DrumRefiner(RefinerConfig(drum_channels=self.config.DRUM_CHANNELS), cond_dim=self.config.N_MELS)
         ckpt = torch.load(args.refiner_ckpt, map_location="cpu")
@@ -383,13 +383,13 @@ class RefinerEvaluator:
 def parse_args():
     p = argparse.ArgumentParser(description="Refiner evaluation on cached FM logits")
     p.add_argument("--refiner_ckpt", required=True, help="Path to refiner checkpoint")
-    p.add_argument("--cache_dir", default="./refiner/eval_cache", help="Path to eval cache directory")
+    p.add_argument("--cache_dir", default="./refiner/eval_cache", help="Path to eval cache directory (reused when --precache is omitted)")
     p.add_argument("--output_dir", default="./refiner/eval_results", help="Directory for evaluation json output")
     p.add_argument("--batch_size", type=int, default=8)
 
     p.add_argument("--precache", action="store_true", help="Precompute FM logits on EGMD eval set (200 segments)")
     p.add_argument("--fm_ckpt", type=str, default="", help="FM checkpoint path (required with --precache)")
-    p.add_argument("--eval_steps", type=int, default=3, help="FM sampling steps for caching")
+    p.add_argument("--eval_steps", type=int, default=5, help="FM sampling steps for caching")
     p.add_argument("--num_samples", type=int, default=200, help="Number of eval segments to cache")
     p.add_argument("--max_gpus", type=int, default=4)
     return p.parse_args()
