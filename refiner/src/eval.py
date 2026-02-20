@@ -118,7 +118,7 @@ def precompute_eval_cache(args, device, device_ids):
             target = target.to(device, non_blocking=True)
 
             fm_loss = loss_wrap(wav_mert, spec, target, progress=0.5).mean().item()
-            fm_logits = loss_wrap.sample(wav_mert, spec, steps=args.eval_steps)
+            fm_logits = loss_wrap.sample(wav_mert, spec, steps=args.fm_steps)
 
             seg_info = ds.files[idx]
             out = {
@@ -249,7 +249,11 @@ class RefinerEvaluator:
             return np.clip(((val + 1) / 2) * 127, 1, 127)
 
         for drum_idx in range(drum_channels):
-            pred_peaks, _ = find_peaks(pred_onset[:, drum_idx], height=0.0, distance=3)
+            pred_peaks, _ = find_peaks(
+                pred_onset[:, drum_idx],
+                height=self.args.threshold,
+                distance=int(0.05 * self.config.FPS),
+            )
             for peak_frame in pred_peaks:
                 pred_notes.append([peak_frame * frame_to_sec, drum_idx + 1, denorm_vel(pred_velocity[peak_frame, drum_idx])])
 
@@ -327,6 +331,7 @@ class RefinerEvaluator:
             target = batch["target"]
             spec = batch["spec"]
             out = model(fm_logits, cond_feats=spec)
+            out["gate"] = torch.clamp(out["gate"] * args.refiner_strength, 0.0, 1.0)
             refined = apply_edits(fm_logits, out["edit_logits"], out["vel_residual"], out["gate"])
 
             for i in range(refined.size(0)):
@@ -420,8 +425,10 @@ def parse_args():
 
     p.add_argument("--precache", action="store_true", help="Precompute FM logits on EGMD eval set (200 segments)")
     p.add_argument("--fm_ckpt", type=str, default="", help="FM checkpoint path (required with --precache)")
-    p.add_argument("--eval_steps", type=int, default=5, help="FM sampling steps for caching")
+    p.add_argument("--fm_steps", type=int, default=3, help="FM sampling steps for caching")
+    p.add_argument("--threshold", type=float, default=0.0, help="Onset threshold for prediction peak-picking")
     p.add_argument("--num_samples", type=int, default=200, help="Number of eval segments to cache")
+    p.add_argument("--refiner_strength", type=float, default=1.0, help="Scale factor for refiner gate")
     p.add_argument("--max_gpus", type=int, default=4)
     return p.parse_args()
 
