@@ -11,7 +11,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import wandb
 
 from src.config import Config
 from src.dataset import EGMDTrainDataset, get_egmd_train_sampler
@@ -22,14 +21,14 @@ def parse_args():
     parser = argparse.ArgumentParser(description='N2N-Flow2 Training')
     parser.add_argument('--resume', type=str, default=None, help='Resume from checkpoint')
     parser.add_argument('--output_dir', type=str, default='./checkpoints', help='Output directory')
-    parser.add_argument('--wandb', action='store_true', help='Use wandb logging')
-    parser.add_argument('--project_name', type=str, default='n2n-flow2', help='Wandb project name')
     parser.add_argument('--oversample', action='store_true', help='Use weighted oversampling for rare-hit files')
     return parser.parse_args()
 
 def main():
     args = parse_args()
     config = Config()
+    config.EPOCHS = 100
+    initial_model_checkpoint = '/workspace/retrain-n2n-flow2/200epoch_checkpoints/checkpoint_epoch_200.pt'
     
     # Setup
     seed_everything(42)
@@ -37,14 +36,6 @@ def main():
     
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    # Initialize wandb
-    if args.wandb:
-        wandb.init(
-            project=args.project_name,
-            config=vars(config),
-            name=f"n2n-flow2-{config.EPOCHS}epochs"
-        )
     
     print(f"🚀 Starting N2N-Flow2 Training")
     print(f"   Device: {device}")
@@ -101,6 +92,15 @@ def main():
         num_training_steps=total_steps,
         min_lr=config.LR_MIN / config.LR_PEAK  # Ratio to base lr
     )
+
+    # Initialize model weights from a fixed checkpoint (optimizer/scheduler are fresh)
+    print(f"📦 Loading model weights from {initial_model_checkpoint}")
+    checkpoint = torch.load(initial_model_checkpoint, map_location='cpu', weights_only=False)
+    model_state_dict = checkpoint['model_state_dict']
+    if isinstance(model, nn.DataParallel):
+        model.module.load_state_dict(model_state_dict)
+    else:
+        model.load_state_dict(model_state_dict)
     
     # Resume training if checkpoint provided
     start_epoch = 0
@@ -119,7 +119,7 @@ def main():
     
     for epoch in range(start_epoch, config.EPOCHS):
         epoch_loss = 0.0
-        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{config.EPOCHS}")
+        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{config.EPOCHS}", ncols=90)
         
         for batch_idx, (audio_mert, spec, target_grid) in enumerate(progress_bar):
             # Move to device
@@ -249,39 +249,21 @@ def main():
                 scheduler.step()
             
             optimizer.zero_grad(set_to_none=True)
-            if args.wandb:
-                wandb.log({
-                    'train_loss': loss.item() * config.GRAD_ACCUM_STEPS,
-                    'learning_rate': current_lr,
-                    'training_progress': progress,
-                    'gradient_norm': grad_norm,
-                    'epoch': epoch + 1
-                })
         
         # Calculate average epoch loss
         avg_epoch_loss = epoch_loss / len(train_loader)
         print(f"Epoch {epoch + 1} - Average Loss: {avg_epoch_loss:.4f}")
         
         # Save checkpoint every 5 epochs
-        if (epoch + 1) % 5 == 0:
+        if (epoch + 1) % 5 == 0 or (epoch + 1) == 1:
             checkpoint_path = os.path.join(args.output_dir, f"checkpoint_epoch_{epoch + 1}.pt")
             save_checkpoint(model, optimizer, scheduler, epoch + 1, avg_epoch_loss, checkpoint_path)
-        
-        # Log epoch summary to wandb
-        if args.wandb:
-            wandb.log({
-                'epoch_loss': avg_epoch_loss,
-                'epoch': epoch + 1
-            })
     
     # Save final checkpoint
     final_checkpoint_path = os.path.join(args.output_dir, f"final_checkpoint_epoch_{config.EPOCHS}.pt")
     save_checkpoint(model, optimizer, scheduler, config.EPOCHS, avg_epoch_loss, final_checkpoint_path)
     
     print("🎉 Training completed!")
-    
-    if args.wandb:
-        wandb.finish()
 
 if __name__ == "__main__":
     main()
