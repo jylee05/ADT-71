@@ -119,7 +119,7 @@ def main():
     
     for epoch in range(start_epoch, config.EPOCHS):
         epoch_loss = 0.0
-        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{config.EPOCHS}", ncols=90)
+        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{config.EPOCHS}", ncols=150)
         
         for batch_idx, (audio_mert, spec, target_grid) in enumerate(progress_bar):
             # Move to device
