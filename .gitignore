@@ -13,6 +13,7 @@ all_ten_checkpoints/
 refiner/cache/
 refiner/checkpoints/
 refiner/eval_cache/
+all_eight_checkpoints/
 
 # --- 시스템 및 환경 설정 제외 ---
 __pycache__/
