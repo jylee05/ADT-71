@@ -400,7 +400,7 @@ class AnnealedPseudoHuberLoss(nn.Module):
         # Per-class weights (Kick, Snare, HH, Toms, Crash, Ride, Bell)
         # NOTE: These are *starting* weights; you can tune later.
         self.class_weights = torch.tensor(
-            [1.0, 1.0, 1.0, 10.0, 10.0, 10.0, 10.0], dtype=torch.float32
+            [10.0, 10.0, 10.0, 1.0, 1.0, 1.0, 1.0], dtype=torch.float32
         )
 
         # Velocity curriculum (applies only on hit frames)

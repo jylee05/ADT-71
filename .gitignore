@@ -7,13 +7,13 @@ eval_results/
 after_vel_notishit_checkpoints/
 before5_3e-4_checkpoints/
 mert_train_checkpoints/
-old_checkpoints/
 all_ten_checkpoints/
 200epoch_checkpoints/
 refiner/cache/
 refiner/checkpoints/
 refiner/eval_cache/
 all_eight_checkpoints/
+for_sparse_checkpoints/
 
 # --- 시스템 및 환경 설정 제외 ---
 __pycache__/
